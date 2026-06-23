@@ -9,7 +9,7 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f9f9f9; color: #333; display: flex; height: 100vh; }
         
         /* 左側固定：常見電台選單 */
-        .sidebar { width: 230px; background: #1e1e24; color: #fff; padding: 20px; box-sizing: border-box; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+        .sidebar { width: 240px; background: #1e1e24; color: #fff; padding: 20px; box-sizing: border-box; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
         .sidebar h3 { margin-top: 0; color: #ff5500; font-size: 18px; border-bottom: 1px solid #333; padding-bottom: 10px; }
         .station-btn { width: 100%; text-align: left; background: none; border: none; color: #ccc; padding: 12px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-bottom: 6px; transition: 0.2s; }
         .station-btn:hover { background: #2a2a35; color: #fff; }
@@ -28,20 +28,22 @@
         .btn-play { background: #28a745; margin-right: 5px; }
         
         /* 雙播放器切換容器 */
-        .player-container { margin-top: 10px; min-height: 120px; }
+        .player-container { margin-top: 10px; min-height: 60px; }
         .hidden-player { display: none !important; }
         iframe { border: none; width: 100%; height: 130px; }
         #yt-player { width: 100%; height: 200px; }
+        #stream-player { width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="sidebar">
         <h3>📻 現場即時電台</h3>
+        <button class="station-btn" onclick="playLiveStation('STREAM', 'https://stream.rcs.revma.com/6w709v7ba0uvv')">📻 飛碟電台 (真實官方串流)</button>
+        <button class="station-btn" onclick="playLiveStation('STREAM', 'https://icrt.s01.live-streams.nl/👑')">📻 ICRT 英文台 (真實官方串流)</button>
         <button class="station-btn" onclick="playLiveStation('YT', '4xDzrJKXOOY')">🎵 經典西洋老歌 24H</button>
-        <button class="station-btn" onclick="playLiveStation('YT', 'jfKfPfyJRdk')">🎧 Lofi Hip Hop 24H</button>
+        <button class="station-btn" onclick="playLiveStation('YT', 'jfKfPfyJRdk')">🎧 Lofi Hip Hop 放鬆音樂</button>
         <button class="station-btn" onclick="playLiveStation('SC', 'https://api.soundcloud.com/tracks/499311132')">🎹 經典鋼琴電台</button>
-</div>
     </div>
 
     <div class="main-content">
@@ -52,6 +54,7 @@
             <div class="player-container">
                 <iframe id="sc-widget" class="hidden-player" src="https://w.soundcloud.com/player/?url=https://api.soundcloud.com/tracks/293&auto_play=false"></iframe>
                 <div id="yt-player" class="hidden-player"></div>
+                <audio id="stream-player" class="hidden-player" controls></audio>
             </div>
             <button onclick="playNext()" style="width: 100%; margin-top: 10px; background: #6c757d;">⏭️ 手動下一首</button>
         </div>
@@ -124,43 +127,56 @@
             loadPlaylist();
         };
 
-        // 優化手機與直播版：點擊左側即時電台的觸發邏輯
+        // 控制左側即時電台點擊觸發邏輯（整合傳統串流、YT 與 SC）
         function playLiveStation(type, urlOrId) {
             document.getElementById('current-title').innerText = `📻 正在收聽即時廣播電台...`;
             switchPlayerUI(type);
             
             if (type === 'YT') {
                 try {
-                    // 採兩階段載入法，先將影片塞進快取（cue），300ms 後強制播放，繞過手機攔截
                     ytPlayer.cueVideoById(urlOrId);
-                    setTimeout(() => {
-                        ytPlayer.playVideo();
-                    }, 300);
+                    setTimeout(() => { ytPlayer.playVideo(); }, 300);
                 } catch(e) {
-                    alert("YouTube API 載入中，請稍候 2 秒再點一次！");
+                    alert("YouTube API 載入中，請稍候！");
                 }
             } else if (type === 'SC') {
                 scWidget.load(urlOrId, { auto_play: true });
+            } else if (type === 'STREAM') {
+                // 這是真正網路電台的原生解碼播放邏輯
+                const streamPlayer = document.getElementById('stream-player');
+                streamPlayer.src = urlOrId;
+                streamPlayer.play().catch(e => {
+                    console.log("瀏覽器阻擋自動播放，已顯示控制面板供手動點擊。");
+                });
             }
         }
 
-        // 控制雙播放器誰該顯示、誰該暫停
+        // 核心切換：控制三個播放器誰該顯示、誰該暫停
         function switchPlayerUI(type) {
             const scElement = document.getElementById('sc-widget');
             const ytElement = document.getElementById('yt-player');
+            const streamElement = document.getElementById('stream-player');
             
+            // 隱藏全部並暫停所有聲音
+            scElement.classList.add('hidden-player');
+            if (ytElement) {
+                const ytDom = document.getElementById('yt-player');
+                if (ytDom) ytDom.classList.add('hidden-player');
+            }
+            streamElement.classList.add('hidden-player');
+            
+            try { ytPlayer.pauseVideo(); } catch(e){}
+            try { scWidget.pause(); } catch(e){}
+            try { streamElement.pause(); } catch(e){}
+            
+            // 根據類型亮起特定播放器
             if (type === 'SC') {
                 scElement.classList.remove('hidden-player');
-                if (ytElement) {
-                    const ytDom = document.getElementById('yt-player');
-                    if (ytDom) ytDom.classList.add('hidden-player');
-                }
-                try { ytPlayer.pauseVideo(); } catch(e){}
             } else if (type === 'YT') {
                 const ytDom = document.getElementById('yt-player');
                 if (ytDom) ytDom.classList.remove('hidden-player');
-                scElement.classList.add('hidden-player');
-                try { scWidget.pause(); } catch(e){}
+            } else if (type === 'STREAM') {
+                streamElement.classList.remove('hidden-player');
             }
         }
 
@@ -189,7 +205,6 @@
             document.getElementById('current-title').innerText = `▶️ 正在播放: ${song.title}`;
             renderPlaylist();
 
-            // 判斷該網址是 YT 還是 SC 來源
             const isYouTube = song.url.includes("youtube.com") || song.url.includes("youtu.be") || !song.url.includes("soundcloud.com");
             
             if (isYouTube) {
