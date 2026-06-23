@@ -17,7 +17,7 @@ app.add_middleware(
 )
 
 # =======================================================
-# 🔒 真正的、唯一的 gspread 初始化區塊（完全拔除 Streamlit）
+# 🔒 真正的、唯一的 gspread 初始化區塊
 # =======================================================
 def get_sheet_data():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
@@ -80,22 +80,19 @@ def sync_playlist(playlist: list):
             df_final = df_others[['username', 'title', 'url']] if 'username' in df_others.columns else pd.DataFrame(columns=['username', 'title', 'url'])
             
         worksheet.clear()
-        # gspread 標準的全量更新語法
         worksheet.update([['username', 'title', 'url']] + df_final[['username', 'title', 'url']].values.tolist())
         return {"status": "success"}
     except Exception as e:
         return {"error": f"同步失敗: {str(e)}"}
 
-# --- API 3: 搜尋歌曲（💥 升級成全面網頁多來源搜尋） ---
+# --- API 3: 搜尋歌曲 ---
 @app.get("/api/search")
 def search_songs(q: str = Query(...)):
     try:
-        # 改用 ytsearch20 以支援解鎖 YouTube 音源，並強制限制回傳 20 筆
         with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'playlistend': 20}) as ydl:
             res = ydl.extract_info(f"ytsearch20:{q}", download=False)
             entries = res.get('entries', [])
             
-            # 標準化輸出格式，補齊 url、避免前端讀取失敗
             cleaned_results = []
             for item in entries:
                 url = item.get('url') if item.get('url') else f"https://www.youtube.com/watch?v={item.get('id')}"
