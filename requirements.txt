@@ -3,3 +3,4 @@ uvicorn
 yt_dlp
 pandas
 gspread
+python-multipart
