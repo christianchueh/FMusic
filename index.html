@@ -1,18 +1,152 @@
-pageItems.forEach((item) => {
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>雲端電台</title>
 
-    // 🚨 就是加在這裡
-    if (!item.url) return;
+<style>
+body{
+    font-family: Arial;
+    max-width:700px;
+    margin:auto;
+    background:#f5f5f5;
+}
 
-    const cleanTitle = item.title
-        .replace(/'/g, "&apos;")
-        .replace(/"/g, "&quot;");
+.card{
+    background:white;
+    padding:15px;
+    margin:10px 0;
+    border-radius:10px;
+}
 
-    resBox.innerHTML += `
-        <div class="song-item">
-            <span style="max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+.song{
+    display:flex;
+    justify-content:space-between;
+    padding:8px;
+    border-bottom:1px solid #eee;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🎧 雲端電台</h2>
+
+<div class="card">
+    <h3 id="now">未播放</h3>
+    <audio id="player" controls style="width:100%"></audio>
+</div>
+
+<div class="card">
+    <input id="q" placeholder="搜尋歌曲">
+    <button onclick="search()">搜尋</button>
+    <div id="results"></div>
+</div>
+
+<div class="card">
+    <h3>📃 歌單</h3>
+    <div id="playlist"></div>
+</div>
+
+<script>
+
+let playlist = [];
+let current = 0;
+const player = document.getElementById("player");
+
+
+// =====================
+// 🔍 搜尋
+// =====================
+async function search(){
+
+    let q = document.getElementById("q").value;
+
+    let res = await fetch("/api/search?q=" + encodeURIComponent(q));
+    let data = await res.json();
+
+    let box = document.getElementById("results");
+    box.innerHTML = "";
+
+    data.forEach(item=>{
+        if(!item.url) return;
+
+        box.innerHTML += `
+            <div class="song">
                 ${item.title}
-            </span>
-            <button onclick="addSong('${cleanTitle}', '${item.url}')">➕ 加入</button>
-        </div>
-    `;
-});
+                <button onclick='add("${item.title}","${item.url}")'>➕</button>
+            </div>
+        `;
+    });
+}
+
+
+// =====================
+// ➕ 加入歌單
+// =====================
+async function add(title,url){
+
+    playlist.push({title,url});
+    render();
+
+    if(playlist.length===1){
+        play(0);
+    }
+}
+
+
+// =====================
+// ▶️ 播放
+// =====================
+async function play(i){
+
+    if(!playlist[i]) return;
+
+    current = i;
+
+    document.getElementById("now").innerText =
+        "▶️ " + playlist[i].title;
+
+    let res = await fetch("/api/stream?url=" + encodeURIComponent(playlist[i].url));
+    let data = await res.json();
+
+    if(!data.stream_url) return;
+
+    player.src = data.stream_url;
+    player.play();
+}
+
+
+// =====================
+// ⏭ 下一首
+// =====================
+player.onended = () => {
+    if(current + 1 < playlist.length){
+        play(current + 1);
+    }else{
+        play(0);
+    }
+};
+
+
+// =====================
+// 📃 render
+// =====================
+function render(){
+    let box = document.getElementById("playlist");
+    box.innerHTML = "";
+
+    playlist.forEach((s,i)=>{
+        box.innerHTML += `
+            <div class="song">
+                ${i+1}. ${s.title}
+                <button onclick="play(${i})">▶️</button>
+            </div>
+        `;
+    });
+}
+
+</script>
+
+</body>
+</html>
