@@ -2,3 +2,4 @@ fastapi
 uvicorn
 yt_dlp
 gspread
+python-multipart
