@@ -2,16 +2,11 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>雲端智慧綜合電台</title>
+    <title>雲端智慧電台</title>
     <script src="https://w.soundcloud.com/player/api.js" type="text/javascript"></script>
-    <script src="https://www.youtube.com/iframe_api"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f9f9f9; color: #333; display: flex; height: 100vh; }
-        .sidebar { width: 230px; background: #1e1e24; color: #fff; padding: 20px; box-sizing: border-box; overflow-y: auto; }
-        .sidebar h3 { margin-top: 0; color: #ff5500; font-size: 18px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .station-btn { width: 100%; text-align: left; background: none; border: none; color: #ccc; padding: 12px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-bottom: 6px; }
-        .station-btn:hover { background: #2a2a35; color: #fff; }
-        .main-content { flex: 1; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; max-width: 700px; margin: 0 auto; background: #f9f9f9; color: #333; }
+        h1, h3 { margin-bottom: 10px; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .song-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
         .playing { font-weight: bold; color: #ff5500; background: #fff5f0; border-radius: 4px; padding: 2px 6px; }
@@ -21,55 +16,38 @@
         button:disabled { background: #ccc; cursor: not-allowed; }
         .btn-del { background: #dc3545; }
         .btn-play { background: #28a745; margin-right: 5px; }
-        .player-container { margin-top: 10px; min-height: 120px; }
-        .hidden-player { display: none !important; }
-        iframe { border: none; width: 100%; height: 130px; }
-        #yt-player { width: 100%; height: 200px; }
+        iframe { border: none; width: 100%; height: 120px; margin-top: 10px; }
     </style>
 </head>
 <body>
-
-    <div class="sidebar">
-        <h3>📻 現場即時電台</h3>
-        <button class="station-btn" onclick="playLiveStation('YT', 'coYw-tI602E')">🎵 飛碟電台 24H 直播</button>
-        <button class="station-btn" onclick="playLiveStation('YT', 'X37T8L2AClA')">📰 中天新聞 24H 直播</button>
-        <button class="station-btn" onclick="playLiveStation('YT', 'jfKfPfyJRdk')">🎧 Lofi Girl 讀書音樂</button>
-        <button class="station-btn" onclick="playLiveStation('SC', 'https://api.soundcloud.com/tracks/499311132')">🎹 經典鋼琴電台</button>
+    <h1>🎧 雲端智慧電台</h1>
+    
+    <div class="card">
+        <h3 id="current-title">⏹️ 目前未播放歌曲</h3>
+        <iframe id="sc-widget" src="https://w.soundcloud.com/player/?url=https://api.soundcloud.com/tracks/293&auto_play=false"></iframe>
+        <button onclick="playNext()" style="width: 100%; margin-top: 10px; background: #6c757d;">⏭️ 手動下一首</button>
     </div>
 
-    <div class="main-content">
-        <h1>🎧 雲端智慧綜合電台</h1>
-        
-        <div class="card">
-            <h3 id="current-title">⏹️ 目前未播放歌曲</h3>
-            <div class="player-container">
-                <iframe id="sc-widget" class="hidden-player" src="https://w.soundcloud.com/player/?url=https://api.soundcloud.com/tracks/293&auto_play=false"></iframe>
-                <div id="yt-player" class="hidden-player"></div>
-            </div>
-            <button onclick="playNext()" style="width: 100%; margin-top: 10px; background: #6c757d;">⏭️ 手動下一首</button>
+    <div class="card">
+        <h3>🎵 搜尋歌曲</h3>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="search-input" placeholder="輸入關鍵字...">
+            <button onclick="searchSongs()">搜尋</button>
         </div>
+        <div id="search-section" style="display: none; margin-top: 15px;">
+            <h4 id="search-page-title">搜尋結果</h4>
+            <div id="search-results"></div>
+            <div class="page-ctrl">
+                <button id="btn-prev" onclick="changePage(-1)">⬅️ 上一頁</button>
+                <span id="page-info">第 1 / 1 頁</span>
+                <button id="btn-next" onclick="changePage(1)">下一頁 ➡️</button>
+            </div>
+        </div>
+    </div>
 
-        <div class="card">
-            <h3>🎵 搜尋歌曲</h3>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="search-input" placeholder="輸入關鍵字...">
-                <button onclick="searchSongs()">搜尋</button>
-            </div>
-            <div id="search-section" style="display: none; margin-top: 15px;">
-                <h4 id="search-page-title">搜尋結果</h4>
-                <div id="search-results"></div>
-                <div class="page-ctrl">
-                    <button id="btn-prev" onclick="changePage(-1)">⬅️ 上一頁</button>
-                    <span id="page-info">第 1 / 1 頁</span>
-                    <button id="btn-next" onclick="changePage(1)">下一頁 ➡️</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3>📃 待播清單</h3>
-            <div id="playlist-box"></div>
-        </div>
+    <div class="card">
+        <h3>📃 待播清單</h3>
+        <div id="playlist-box"></div>
     </div>
 
     <script>
@@ -78,57 +56,19 @@
         let currentIndex = 0;
         let searchPage = 0;
         const ITEMS_PER_PAGE = 5;
-        let scWidget;
-        let ytPlayer;
+        
+        // 綁定官方 Widget 控制器
+        const widgetIframe = document.getElementById('sc-widget');
+        const widget = SC.Widget(widgetIframe);
 
-        function onYouTubeIframeAPIReady() {
-            ytPlayer = new YT.Player('yt-player', {
-                height: '200',
-                width: '100%',
-                videoId: 'coYw-tI602E', 
-                playerVars: { 'autoplay': 0, 'controls': 1, 'rel': 0 },
-                events: { 'onStateChange': onYTPlayerStateChange }
+        // 監聽官方播放器「播完了」事件
+        widget.bind(SC.Widget.Events.READY, function() {
+            widget.bind(SC.Widget.Events.FINISH, function() {
+                playNext();
             });
-        }
+        });
 
-        function onYTPlayerStateChange(event) {
-            if (event.data === YT.PlayerState.ENDED) { playNext(); }
-        }
-
-        window.onload = function() {
-            const scIframe = document.getElementById('sc-widget');
-            scWidget = SC.Widget(scIframe);
-            scWidget.bind(SC.Widget.Events.READY, function() {
-                scWidget.bind(SC.Widget.Events.FINISH, function() { playNext(); });
-            });
-            loadPlaylist();
-        };
-
-        function playLiveStation(type, urlOrId) {
-            document.getElementById('current-title').innerText = `📻 正在收聽即時廣播電台...`;
-            switchPlayerUI(type);
-            if (type === 'YT') {
-                ytPlayer.loadVideoById(urlOrId);
-                ytPlayer.playVideo();
-            } else if (type === 'SC') {
-                scWidget.load(urlOrId, { auto_play: true });
-            }
-        }
-
-        function switchPlayerUI(type) {
-            const scElement = document.getElementById('sc-widget');
-            const ytElement = document.getElementById('yt-player');
-            if (type === 'SC') {
-                scElement.classList.remove('hidden-player');
-                if (ytElement) ytElement.classList.add('hidden-player');
-                try { ytPlayer.pauseVideo(); } catch(e){}
-            } else if (type === 'YT') {
-                if (ytElement) ytElement.classList.remove('hidden-player');
-                scElement.classList.add('hidden-player');
-                try { scWidget.pause(); } catch(e){}
-            }
-        }
-
+        // 載入歌單
         async function loadPlaylist() {
             try {
                 const res = await fetch('/api/playlist');
@@ -136,10 +76,13 @@
                 if (data && data.error) { alert(data.error); return; }
                 playlist = Array.isArray(data) ? data : [];
                 renderPlaylist();
-                if (playlist.length > 0) { loadSong(0, false); }
+                if (playlist.length > 0) {
+                    loadSong(0, false); // 預載第一首，不自動發聲
+                }
             } catch (e) { console.error(e); }
         }
 
+        // 播放特定歌曲 (優化手機自動播放版)
         function loadSong(index, shouldPlay = true) {
             if (playlist.length === 0) return;
             if (index >= playlist.length) index = 0;
@@ -150,21 +93,19 @@
             document.getElementById('current-title').innerText = `▶️ 正在播放: ${song.title}`;
             renderPlaylist();
 
-            const isYouTube = song.url.includes("youtube.com") || song.url.includes("youtu.be") || !song.url.includes("soundcloud.com");
-            if (isYouTube) {
-                switchPlayerUI('YT');
-                let videoId = "";
-                if (song.url.includes("v=")) {
-                    videoId = song.url.split("v=")[1].split("&")[0];
-                } else {
-                    videoId = song.url.substring(song.url.lastIndexOf("/") + 1);
-                }
-                if (shouldPlay) { ytPlayer.loadVideoById(videoId); } else { ytPlayer.cueVideoById(videoId); }
-            } else {
-                switchPlayerUI('SC');
-                if (shouldPlay) { scWidget.play(); }
-                scWidget.load(song.url, { auto_play: shouldPlay, hide_related: true, show_comments: false, show_user: false, show_reposts: false });
+            if (shouldPlay) {
+                // 💥 核心破解：在載入新歌前，先呼叫一次 play 激活手機音訊通道
+                widget.play(); 
             }
+
+            // 緊接著將新歌曲網址灌進播放器
+            widget.load(song.url, {
+                auto_play: shouldPlay,
+                hide_related: true,
+                show_comments: false,
+                show_user: false,
+                show_reposts: false
+            });
         }
 
         function playNext() {
@@ -191,11 +132,12 @@
             });
         }
 
+        // 搜尋歌曲
         async function searchSongs() {
             const q = document.getElementById('search-input').value;
             if (!q) return;
             const resBox = document.getElementById('search-results');
-            resBox.innerHTML = "<p style='color:#ff5500;'>🔍 正在抓取搜尋結果，請稍候...</p>";
+            resBox.innerHTML = "<p style='color:#ff5500;'>🔍 正在從雲端抓取搜尋結果...</p>";
             document.getElementById('search-section').style.display = "block";
             try {
                 const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
@@ -207,6 +149,7 @@
             } catch (e) { resBox.innerHTML = "<p style='color:red;'>網路連線異常。</p>"; }
         }
 
+        // 搜尋結果換頁
         function renderSearchResults() {
             const resBox = document.getElementById('search-results');
             resBox.innerHTML = "";
@@ -225,7 +168,7 @@
                 const cleanTitle = item.title.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 resBox.innerHTML += `
                     <div class="song-item">
-                        <span style="max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px;">${item.title}</span>
+                        <span style="max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.title}</span>
                         <button onclick="addSong('${cleanTitle}', '${item.url}')">➕ 加入</button>
                     </div>
                 `;
@@ -237,6 +180,7 @@
             renderSearchResults();
         }
 
+        // 新增與同步
         async function addSong(title, url) {
             playlist.push({ title, url });
             renderPlaylist();
@@ -248,6 +192,7 @@
             });
         }
 
+        // 刪除歌曲
         async function deleteSong(index) {
             playlist.splice(index, 1);
             if (index === currentIndex) {
@@ -263,6 +208,8 @@
                 body: JSON.stringify(playlist)
             });
         }
+
+        loadPlaylist();
     </script>
 </body>
 </html>
