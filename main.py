@@ -82,11 +82,33 @@ def sync_playlist(playlist: list):
 @app.get("/api/search")
 def search_songs(q: str = Query(...)):
     try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
-            res = ydl.extract_info(f"scsearch20:{q}", download=False)
-            return res.get('entries', [])
+        ydl_opts = {
+            'quiet': True,
+            'extract_flat': True,
+            'nocheckcertificate': True
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            res = ydl.extract_info(f"scsearch10:{q}", download=False)
+
+            entries = res.get('entries') or []
+
+            # 🔥 過濾 None / 無效資料
+            clean = []
+            for e in entries:
+                if not e:
+                    continue
+                if 'title' not in e:
+                    continue
+                clean.append({
+                    "title": e.get("title", "unknown"),
+                    "url": e.get("url")
+                })
+
+            return clean
+
     except Exception as e:
-        return {"error": f"搜尋失敗: {str(e)}"}
+        return {"error": str(e)}
 
 @app.get("/api/stream")
 def get_stream_url(url: str = Query(...)):
