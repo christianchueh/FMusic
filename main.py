@@ -17,7 +17,7 @@ app.add_middleware(
 )
 
 # =======================================================
-# 🔒 真正的、唯一的 gspread 初始化區塊
+# 🔒 真正的、唯一的 gspread 初始化區塊（完全拔除 Streamlit）
 # =======================================================
 def get_sheet_data():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
@@ -52,6 +52,7 @@ def get_playlist():
             
         return df[df['username'] == 'admin'].to_dict('records')
     except Exception as e:
+        # 如果這裡抓到錯誤，它會顯示真正的 gspread 錯誤（例如試算表找不到等原因）
         return {"error": f"資料庫連線失敗: {str(e)}"}
 
 # --- API 2: 同步歌單 ---
@@ -80,6 +81,7 @@ def sync_playlist(playlist: list):
             df_final = df_others[['username', 'title', 'url']] if 'username' in df_others.columns else pd.DataFrame(columns=['username', 'title', 'url'])
             
         worksheet.clear()
+        # gspread 標準的全量更新語法
         worksheet.update([['username', 'title', 'url']] + df_final[['username', 'title', 'url']].values.tolist())
         return {"status": "success"}
     except Exception as e:
@@ -89,18 +91,9 @@ def sync_playlist(playlist: list):
 @app.get("/api/search")
 def search_songs(q: str = Query(...)):
     try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'playlistend': 20}) as ydl:
-            res = ydl.extract_info(f"ytsearch20:{q}", download=False)
-            entries = res.get('entries', [])
-            
-            cleaned_results = []
-            for item in entries:
-                url = item.get('url') if item.get('url') else f"https://www.youtube.com/watch?v={item.get('id')}"
-                cleaned_results.append({
-                    "title": item.get("title", "未知歌曲"),
-                    "url": url
-                })
-            return cleaned_results
+        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+            res = ydl.extract_info(f"scsearch20:{q}", download=False)
+            return res.get('entries', [])
     except Exception as e:
         return {"error": f"搜尋失敗: {str(e)}"}
 
