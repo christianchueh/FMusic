@@ -82,33 +82,85 @@ def sync_playlist(playlist: list):
 @app.get("/api/search")
 def search_songs(q: str = Query(...)):
     try:
-        ydl_opts = {
+        results = []
+
+        # =========================
+        # 1️⃣ YouTube（最穩）
+        # =========================
+        with yt_dlp.YoutubeDL({
             'quiet': True,
             'extract_flat': True,
             'nocheckcertificate': True
-        }
+        }) as ydl:
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            res = ydl.extract_info(f"scsearch10:{q}", download=False)
+            yt = ydl.extract_info(f"ytsearch10:{q}", download=False)
+            yt_entries = yt.get('entries') or []
 
-            entries = res.get('entries') or []
-
-            # 🔥 過濾 None / 無效資料
-            clean = []
-            for e in entries:
+            for e in yt_entries:
                 if not e:
                     continue
-                if 'title' not in e:
-                    continue
-                clean.append({
-                    "title": e.get("title", "unknown"),
-                    "url": e.get("url")
+                results.append({
+                    "title": f"🎬 {e.get('title','')}",
+                    "url": e.get('url'),
+                    "source": "youtube"
                 })
 
-            return clean
+        # =========================
+        # 2️⃣ SoundCloud（備援）
+        # =========================
+        try:
+            with yt_dlp.YoutubeDL({
+                'quiet': True,
+                'extract_flat': True,
+                'nocheckcertificate': True
+            }) as ydl:
+
+                sc = ydl.extract_info(f"scsearch10:{q}", download=False)
+                sc_entries = sc.get('entries') or []
+
+                for e in sc_entries:
+                    if not e:
+                        continue
+                    if not e.get('url'):
+                        continue
+
+                    results.append({
+                        "title": f"☁️ {e.get('title','')}",
+                        "url": e.get('url'),
+                        "source": "soundcloud"
+                    })
+
+        except Exception:
+            # SoundCloud 壞掉不影響 YouTube
+            pass
+
+        # =========================
+        # 3️⃣ 去重 + 清理
+        # =========================
+        seen = set()
+        clean = []
+
+        for r in results:
+            if not r["url"]:
+                continue
+            if r["url"] in seen:
+                continue
+            seen.add(r["url"])
+            clean.append(r)
+
+        # =========================
+        # 4️⃣ 如果真的完全空 → fallback
+        # =========================
+        if not clean:
+            return [{
+                "title": "❌ 沒有找到結果（請換關鍵字）",
+                "url": None
+            }]
+
+        return clean
 
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"搜尋失敗: {str(e)}"}
 
 @app.get("/api/stream")
 def get_stream_url(url: str = Query(...)):
