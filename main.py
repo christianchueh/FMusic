@@ -4,10 +4,9 @@ from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
-import pandas as pd
 import gspread
 
-app = FastAPI(title="雲端智慧電台")
+app = FastAPI(title="雲端智慧綜合電台")
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,18 +15,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =======================================================
+# 🔒 100% 純淨的 gspread 初始化機制（絕無內鬼）
+# =======================================================
 def get_sheet_data():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
     if not creds_json:
         raise ValueError("系統找不到 GOOGLE_CREDENTIALS 環境變數。")
+    
     creds_dict = json.loads(creds_json)
     gc = gspread.service_account_from_dict(creds_dict)
     
-    # 💥 請確保這裡的名字跟你 Google 試算表名稱一模一樣！
+    # 💥 請務必確認這裡的名字跟你 Google 試算表名稱一模一樣！
     sh = gc.open("你的GoogleSheet名稱") 
     worksheet = sh.worksheet("playlists")
     return worksheet
 
+# --- API 1: 取得歌單 ---
 @app.get("/api/playlist")
 def get_playlist():
     try:
@@ -35,52 +39,74 @@ def get_playlist():
         records = worksheet.get_all_records()
         if not records:
             return []
-        df = pd.DataFrame(records)
-        df.columns = [str(c).lower().strip() for c in df.columns]
-        if 'username' not in df.columns:
-            return []
-        return df[df['username'] == 'admin'].to_dict('records')
+        
+        # 用標準 Python 處理欄位名稱防呆，完全不靠 Pandas
+        cleaned_records = []
+        for r in records:
+            clean_row = {str(k).lower().strip(): v for k, v in r.items()}
+            if clean_row.get('username') == 'admin':
+                cleaned_records.append({
+                    "username": "admin",
+                    "title": clean_row.get("title", "無題"),
+                    "url": clean_row.get("url", "")
+                })
+        return cleaned_records
     except Exception as e:
         return {"error": f"資料庫連線失敗: {str(e)}"}
 
+# --- API 2: 同步歌單 ---
 @app.post("/api/playlist/sync")
 def sync_playlist(playlist: list):
     try:
         worksheet = get_sheet_data()
-        try:
-            records = worksheet.get_all_records()
-            if records:
-                df_all = pd.DataFrame(records)
-                df_all.columns = [str(c).lower().strip() for c in df_all.columns]
-                df_others = df_all[df_all['username'] != 'admin']
-            else:
-                df_others = pd.DataFrame(columns=['username', 'title', 'url'])
-        except:
-            df_others = pd.DataFrame(columns=['username', 'title', 'url'])
-            
-        new_data = pd.DataFrame(playlist)
-        if not new_data.empty:
-            new_data.columns = [str(c).lower().strip() for c in new_data.columns]
-            new_data['username'] = 'admin'
-            new_data = new_data[['username', 'title', 'url']]
-            df_final = pd.concat([df_others, new_data], ignore_index=True)
-        else:
-            df_final = df_others[['username', 'title', 'url']] if 'username' in df_others.columns else pd.DataFrame(columns=['username', 'title', 'url'])
+        records = worksheet.get_all_records()
+        
+        # 篩選出非 admin 的留下來
+        final_rows = []
+        if records:
+            for r in records:
+                clean_row = {str(k).lower().strip(): v for k, v in r.items()}
+                if clean_row.get('username') != 'admin' and clean_row.get('username') != '':
+                    final_rows.append([
+                        clean_row.get('username'),
+                        clean_row.get('title', '無題'),
+                        clean_row.get('url', '')
+                    ])
+                    
+        # 把新編輯的 admin 歌單加進去
+        for song in playlist:
+            final_rows.append([
+                "admin",
+                song.get("title", "無題"),
+                song.get("url", "")
+            ])
             
         worksheet.clear()
-        worksheet.update([['username', 'title', 'url']] + df_final[['username', 'title', 'url']].values.tolist())
+        # 直接更新：標題列 + 所有的資料列
+        worksheet.update([['username', 'title', 'url']] + final_rows)
         return {"status": "success"}
     except Exception as e:
         return {"error": f"同步失敗: {str(e)}"}
 
-# --- 💥 修正：移除 scsearch 前綴，改用通用搜尋，這樣 YouTube 來源才會出來 ---
+# --- API 3: 搜尋歌曲 (完全移除 Streamlit 殘留) ---
 @app.get("/api/search")
 def search_songs(q: str = Query(...)):
     try:
-        # ytdl 預設會優先搜尋 YouTube
+        # 用純 yt_dlp 進行搜尋，不夾帶任何特定的連線快取
         with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'playlistend': 20}) as ydl:
             res = ydl.extract_info(f"ytsearch20:{q}", download=False)
-            return res.get('entries', [])
+            entries = res.get('entries', [])
+            
+            # 標準化回傳格式，確保前端拿到乾淨的 title 與 url
+            results = []
+            for item in entries:
+                if item.get('url') or item.get('id'):
+                    url = item.get('url') if item.get('url') else f"https://www.youtube.com/watch?v={item.get('id')}"
+                    results.append({
+                        "title": item.get("title", "未知歌曲"),
+                        "url": url
+                    })
+            return results
     except Exception as e:
         return {"error": f"搜尋失敗: {str(e)}"}
 
