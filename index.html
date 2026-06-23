@@ -2,49 +2,51 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>⚡ FastAPI 雲端智慧電台</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@exampleuser/picocss@1/css/pico.min.css">
+    <title>雲端智慧電台</title>
     <style>
-        body { padding: 20px; max-width: 800px; margin: 0 auto; }
-        .song-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .playing { font-weight: bold; color: #10b981; }
-        .page-ctrl { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 700px; margin: 0 auto; background: #f9f9f9; color: #333; }
+        h1, h3 { margin-bottom: 10px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .song-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .playing { font-weight: bold; color: #10b981; background: #e6f4ea; border-radius: 4px; padding: 2px 6px; }
+        .page-ctrl { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; background: #f0f0f0; padding: 10px; border-radius: 4px; }
+        input[type="text"] { width: 70%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 8px 15px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-del { background: #dc3545; }
+        .btn-play { background: #28a745; margin-right: 5px; }
     </style>
 </head>
 <body>
-    <main class="container">
-        <h1>🎧 雲端智慧電台</h1>
-        
-        <article>
-            <h5 id="current-title">⏹️ 目前未播放歌曲</h5>
-            <audio id="audio-player" controls style="width: 100%;"></audio>
-            <div style="margin-top: 10px;">
-                <button onclick="playNext()" class="outline text-error" style="width: 100%;">⏭️ 手動下一首</button>
-            </div>
-        </article>
+    <h1>🎧 雲端智慧電台</h1>
+    
+    <div class="card">
+        <h3 id="current-title">⏹️ 目前未播放歌曲</h3>
+        <audio id="audio-player" controls style="width: 100%; margin-top: 10px;"></audio>
+        <button onclick="playNext()" style="width: 100%; margin-top: 10px; background: #6c757d;">⏭️ 手動下一首</button>
+    </div>
 
-        <section>
-            <label for="search">🎵 搜尋歌曲</label>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="search-input" placeholder="輸入關鍵字後點搜尋...">
-                <button onclick="searchSongs()">搜尋</button>
+    <div class="card">
+        <h3>🎵 搜尋歌曲</h3>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="search-input" placeholder="輸入關鍵字...">
+            <button onclick="searchSongs()">搜尋</button>
+        </div>
+        <div id="search-section" style="display: none; margin-top: 15px;">
+            <h4 id="search-page-title">搜尋結果</h4>
+            <div id="search-results"></div>
+            <div class="page-ctrl">
+                <button id="btn-prev" onclick="changePage(-1)">⬅️ 上一頁</button>
+                <span id="page-info">第 1 / 1 頁</span>
+                <button id="btn-next" onclick="changePage(1)">下一頁 ➡️</button>
             </div>
-            <div id="search-section" style="display: none;">
-                <h5 id="search-page-title">搜尋結果</h5>
-                <div id="search-results"></div>
-                <div class="page-ctrl">
-                    <button id="btn-prev" onclick="changePage(-1)" class="secondary small" style="padding:5px 15px;">⬅️ 上一頁</button>
-                    <span id="page-info">第 1 / 1 頁</span>
-                    <button id="btn-next" onclick="changePage(1)" class="secondary small" style="padding:5px 15px;">下一頁 ➡️</button>
-                </div>
-            </div>
-        </section>
+        </div>
+    </div>
 
-        <section>
-            <h3>📃 待播清單</h3>
-            <div id="playlist-box"></div>
-        </section>
-    </main>
+    <div class="card">
+        <h3>📃 待播清單</h3>
+        <div id="playlist-box"></div>
+    </div>
 
     <script>
         let playlist = [];
@@ -54,21 +56,28 @@
         const ITEMS_PER_PAGE = 5;
         const player = document.getElementById('audio-player');
 
-        // 載入雲端歌單
+        // 載入歌單
         async function loadPlaylist() {
             try {
                 const res = await fetch('/api/playlist');
                 const data = await res.json();
-                if (data.error) { console.error(data.error); return; }
-                playlist = data;
+                
+                if (data && data.error) {
+                    alert(data.error); // 彈窗提示真正的後端連線問題
+                    return;
+                }
+                
+                playlist = Array.isArray(data) ? data : [];
                 renderPlaylist();
                 if (playlist.length > 0 && player.src === "") {
                     loadSong(0, false); 
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error("無法連線至後端 API", e);
+            }
         }
 
-        // 播放控制
+        // 播放歌曲
         async function loadSong(index, shouldPlay = true) {
             if (playlist.length === 0) return;
             if (index >= playlist.length) index = 0;
@@ -82,12 +91,15 @@
             try {
                 const res = await fetch(`/api/stream?url=${encodeURIComponent(song.url)}`);
                 const data = await res.json();
+                if (data.error) { alert(data.error); return; }
                 player.src = data.stream_url;
                 if (shouldPlay) player.play();
-            } catch (e) { alert("此歌曲解析失敗，請試下一首"); }
+            } catch (e) {
+                alert("此音訊連結解析失敗");
+            }
         }
 
-        // 💥 完美自動播放下一首監聽
+        // 自動播放下一首
         player.onended = function() {
             playNext();
         };
@@ -99,45 +111,58 @@
             }
         }
 
+        // 渲染待播清單 UI
         function renderPlaylist() {
             const box = document.getElementById('playlist-box');
-            box.innerHTML = playlist.length === 0 ? "<p>歌單是空的，快去搜尋加歌！</p>" : "";
+            box.innerHTML = playlist.length === 0 ? "<p style='color:#888;'>清單內尚無歌曲</p>" : "";
+            
             playlist.forEach((song, i) => {
                 const isPlaying = i === currentIndex;
                 box.innerHTML += `
                     <div class="song-item">
                         <span class="${isPlaying ? 'playing' : ''}">${i+1}. ${song.title}</span>
                         <div>
-                            <button onclick="loadSong(${i}, true)" class="button secondary small" style="padding:4px 10px; margin-right:5px; font-size:12px;">點播</button>
-                            <button onclick="deleteSong(${i})" class="button contrast small" style="padding:4px 10px; background:#da2a2a; font-size:12px;">❌</button>
+                            <button onclick="loadSong(${i}, true)" class="btn-play">點播</button>
+                            <button onclick="deleteSong(${i})" class="btn-del">❌</button>
                         </div>
                     </div>
                 `;
             });
         }
 
-        // 搜尋功能
+        // 搜尋歌曲
         async function searchSongs() {
             const q = document.getElementById('search-input').value;
             if (!q) return;
-            document.getElementById('search-results').innerHTML = "<p>🔍 搜尋中，請稍候...</p>";
+            
+            const resBox = document.getElementById('search-results');
+            resBox.innerHTML = "<p style='color:#007bff;'>🔍 正在從雲端抓取搜尋結果，請稍候...</p>";
             document.getElementById('search-section').style.display = "block";
             
             try {
                 const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-                searchResults = await res.json();
+                const data = await res.json();
+                
+                if (data && data.error) {
+                    resBox.innerHTML = `<p style='color:red;'>${data.error}</p>`;
+                    return;
+                }
+                
+                searchResults = Array.isArray(data) ? data : [];
                 searchPage = 0;
                 renderSearchResults();
-            } catch (e) { document.getElementById('search-results').innerHTML = "<p>搜尋失敗，請重試</p>"; }
+            } catch (e) {
+                resBox.innerHTML = "<p style='color:red;'>網路連線異常，請重新搜尋。</p>";
+            }
         }
 
-        // 💥 搜尋結果分頁渲染邏輯
+        // 搜尋結果換頁邏輯
         function renderSearchResults() {
             const resBox = document.getElementById('search-results');
             resBox.innerHTML = "";
             
             if (searchResults.length === 0) {
-                resBox.innerHTML = "<p>找不到任何結果。</p>";
+                resBox.innerHTML = "<p>沒有找到相關歌曲，請換個關鍵字試試。</p>";
                 return;
             }
 
@@ -148,16 +173,15 @@
             document.getElementById('search-page-title').innerText = `搜尋結果 (共 ${searchResults.length} 筆)`;
             document.getElementById('page-info').innerText = `第 ${searchPage + 1} / ${totalPages} 頁`;
             
-            document.getElementById('btn-prev').disabled = searchPage === 0;
-            document.getElementById('btn-next').disabled = searchPage >= total_pages - 1;
+            document.getElementById('btn-prev').disabled = (searchPage === 0);
+            document.getElementById('btn-next').disabled = (searchPage >= totalPages - 1);
 
-            pageItems.forEach((item, index) => {
-                // 清理字串，防止引號導致的 HTML 爆裂
+            pageItems.forEach((item) => {
                 const cleanTitle = item.title.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 resBox.innerHTML += `
                     <div class="song-item">
-                        <span style="font-size:14px; max-width:70%; overflow:hidden;">${item.title}</span>
-                        <button onclick="addSong('${cleanTitle}', '${item.url}')" style="padding:4px 10px; font-size:12px;">➕ 加入</button>
+                        <span style="max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.title}</span>
+                        <button onclick="addSong('${cleanTitle}', '${item.url}')">➕ 加入</button>
                     </div>
                 `;
             });
@@ -168,20 +192,22 @@
             renderSearchResults();
         }
 
-        // 加歌與同步
+        // 新增歌曲
         async function addSong(title, url) {
             playlist.push({ title, url });
             renderPlaylist();
-            if (playlist.length === 1) { loadSong(0, false); } // 如果原本是空的，加完自動綁定第一首
+            if (playlist.length === 1) { loadSong(0, false); }
             
-            await fetch('/api/playlist/sync', {
+            const res = await fetch('/api/playlist/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(playlist)
             });
+            const data = await res.json();
+            if (data.error) alert(data.error);
         }
 
-        // 刪歌
+        // 刪除歌曲
         async function deleteSong(index) {
             playlist.splice(index, 1);
             if (index === currentIndex) {
@@ -191,11 +217,14 @@
                 currentIndex--;
             }
             renderPlaylist();
-            await fetch('/api/playlist/sync', {
+            
+            const res = await fetch('/api/playlist/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(playlist)
             });
+            const data = await res.json();
+            if (data.error) alert(data.error);
         }
 
         loadPlaylist();
