@@ -9,7 +9,6 @@ import gspread
 
 app = FastAPI(title="雲端智慧電台")
 
-# 允許跨網域存取
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,35 +16,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 核心修改：讀取 Render 環境變數中的 Google 憑證 ---
-def get_gspread_client():
-    # 我們等一下會在 Render 設定一個叫 GOOGLE_CREDENTIALS 的環境變數
+def get_sheet_data():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
     if not creds_json:
-        raise ValueError("找不到 GOOGLE_CREDENTIALS 環境變數，請在 Render 後台設定！")
-    
+        raise ValueError("GOOGLE_CREDENTIALS 找不到")
     creds_dict = json.loads(creds_json)
     gc = gspread.service_account_from_dict(creds_dict)
-    return gc
-
-# 取得指定工作表資料的共用函式
-def get_sheet_data():
-    gc = get_gspread_client()
-    # 填入你原本 Google Sheet 的名稱（例如 "music_db" 之類的）
-    # 如果你的 Sheet 網址有固定，也可以用 gc.open_by_key("你的Sheet金鑰")
+    
+    # 💥 請確保這裡改成你真正的 Google Sheet 試算表名稱！
     sh = gc.open("你的GoogleSheet名稱") 
     worksheet = sh.worksheet("playlists")
     return worksheet
 
-# --- API 1: 取得 admin 的歌單 ---
+# --- API 1: 取得歌單 (防呆確保必有欄位) ---
 @app.get("/api/playlist")
 def get_playlist():
     try:
         worksheet = get_sheet_data()
         records = worksheet.get_all_records()
-        df = pd.DataFrame(records)
-        if df.empty:
+        if not records:
             return []
+        df = pd.DataFrame(records)
+        # 強制將所有欄位轉小寫，防止欄位名稱對不上的問題
+        df.columns = [str(c).lower().strip() for c in df.columns]
+        
+        if 'username' not in df.columns:
+            return []
+            
         return df[df['username'] == 'admin'].to_dict('records')
     except Exception as e:
         return {"error": str(e)}
@@ -56,30 +53,32 @@ def sync_playlist(playlist: list):
     try:
         worksheet = get_sheet_data()
         records = worksheet.get_all_records()
-        df_all = pd.DataFrame(records)
         
-        # 篩選出非 admin 的資料
-        if not df_all.empty and 'username' in df_all.columns:
+        if records:
+            df_all = pd.DataFrame(records)
+            df_all.columns = [str(c).lower().strip() for c in df_all.columns]
             df_others = df_all[df_all['username'] != 'admin']
         else:
             df_others = pd.DataFrame(columns=['username', 'title', 'url'])
             
-        # 建立 admin 的新資料
         new_data = pd.DataFrame(playlist)
         if not new_data.empty:
+            new_data.columns = [str(c).lower().strip() for c in new_data.columns]
             new_data['username'] = 'admin'
+            # 確保欄位順序固定
+            new_data = new_data[['username', 'title', 'url']]
             df_final = pd.concat([df_others, new_data], ignore_index=True)
         else:
-            df_final = df_others
+            df_final = df_others[['username', 'title', 'url']] if 'username' in df_others.columns else pd.DataFrame(columns=['username', 'title', 'url'])
             
-        # 清空工作表並重新寫入（含標題列）
         worksheet.clear()
-        worksheet.update([df_final.columns.values.tolist()] + df_final.values.tolist())
+        # 寫入包含標準標題列的資料
+        worksheet.update([['username', 'title', 'url']] + df_final[['username', 'title', 'url']].values.tolist())
         return {"status": "success"}
     except Exception as e:
         return {"error": str(e)}
 
-# --- API 3: 搜尋歌曲與解析串流 ---
+# --- API 3: 搜尋與串流 ---
 @app.get("/api/search")
 def search_songs(q: str = Query(...)):
     with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
@@ -92,7 +91,6 @@ def get_stream_url(url: str = Query(...)):
         info = ydl.extract_info(url, download=False)
         return {"stream_url": info['url']}
 
-# --- 讓根網址直接顯示前端網頁 ---
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     with open("index.html", "r", encoding="utf-8") as f:
