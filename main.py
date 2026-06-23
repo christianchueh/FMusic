@@ -16,26 +16,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =======================================================
-# 🔒 真正的、唯一的 gspread 初始化區塊（完全拔除 Streamlit）
-# =======================================================
 def get_sheet_data():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
     if not creds_json:
-        raise ValueError("系統找不到 GOOGLE_CREDENTIALS 環境變數，請檢查 Render 後台設定。")
-    
-    # 解析 JSON 憑證字串
+        raise ValueError("系統找不到 GOOGLE_CREDENTIALS 環境變數。")
     creds_dict = json.loads(creds_json)
-    
-    # 透過標準 gspread 機制登入
     gc = gspread.service_account_from_dict(creds_dict)
     
-    # 💥 請「一定要」確認這裡的名字跟你的 Google 試算表檔案名稱完全一致！
-    sh = gc.open("music") 
+    # 💥 請確保這裡的名字跟你 Google 試算表名稱一模一樣！
+    sh = gc.open("你的GoogleSheet名稱") 
     worksheet = sh.worksheet("playlists")
     return worksheet
 
-# --- API 1: 取得歌單 ---
 @app.get("/api/playlist")
 def get_playlist():
     try:
@@ -43,19 +35,14 @@ def get_playlist():
         records = worksheet.get_all_records()
         if not records:
             return []
-        
         df = pd.DataFrame(records)
         df.columns = [str(c).lower().strip() for c in df.columns]
-        
         if 'username' not in df.columns:
             return []
-            
         return df[df['username'] == 'admin'].to_dict('records')
     except Exception as e:
-        # 如果這裡抓到錯誤，它會顯示真正的 gspread 錯誤（例如試算表找不到等原因）
         return {"error": f"資料庫連線失敗: {str(e)}"}
 
-# --- API 2: 同步歌單 ---
 @app.post("/api/playlist/sync")
 def sync_playlist(playlist: list):
     try:
@@ -81,18 +68,18 @@ def sync_playlist(playlist: list):
             df_final = df_others[['username', 'title', 'url']] if 'username' in df_others.columns else pd.DataFrame(columns=['username', 'title', 'url'])
             
         worksheet.clear()
-        # gspread 標準的全量更新語法
         worksheet.update([['username', 'title', 'url']] + df_final[['username', 'title', 'url']].values.tolist())
         return {"status": "success"}
     except Exception as e:
         return {"error": f"同步失敗: {str(e)}"}
 
-# --- API 3: 搜尋歌曲 ---
+# --- 💥 修正：移除 scsearch 前綴，改用通用搜尋，這樣 YouTube 來源才會出來 ---
 @app.get("/api/search")
 def search_songs(q: str = Query(...)):
     try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
-            res = ydl.extract_info(f"scsearch20:{q}", download=False)
+        # ytdl 預設會優先搜尋 YouTube
+        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'playlistend': 20}) as ydl:
+            res = ydl.extract_info(f"ytsearch20:{q}", download=False)
             return res.get('entries', [])
     except Exception as e:
         return {"error": f"搜尋失敗: {str(e)}"}
