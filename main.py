@@ -3,6 +3,8 @@ import json
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List
 import yt_dlp
 import pandas as pd
 import gspread
@@ -16,6 +18,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 💡 定義歌曲的資料結構，解決 422 驗證錯誤
+class SongItem(BaseModel):
+    title: str
+    url: str
+
 # =======================================================
 # 🔒 真正的、唯一的 gspread 初始化區塊
 # =======================================================
@@ -24,13 +31,8 @@ def get_sheet_data():
     if not creds_json:
         raise ValueError("系統找不到 GOOGLE_CREDENTIALS 環境變數，請檢查 Render 後台設定。")
     
-    # 解析 JSON 憑證字串
     creds_dict = json.loads(creds_json)
-    
-    # 透過標準 gspread 機制登入
     gc = gspread.service_account_from_dict(creds_dict)
-    
-    # 💥 請「一定要」確認這裡的名字跟你的 Google 試算表檔案名稱完全一致！
     sh = gc.open("music") 
     worksheet = sh.worksheet("playlists")
     return worksheet
@@ -56,7 +58,7 @@ def get_playlist():
 
 # --- API 2: 同步歌單 ---
 @app.post("/api/playlist/sync")
-def sync_playlist(playlist: list):
+def sync_playlist(playlist: List[SongItem]):  # 💡 這裡改用 List[SongItem] 接收
     try:
         worksheet = get_sheet_data()
         try:
@@ -70,7 +72,10 @@ def sync_playlist(playlist: list):
         except:
             df_others = pd.DataFrame(columns=['username', 'title', 'url'])
             
-        new_data = pd.DataFrame(playlist)
+        # 💡 將 Pydantic 模型陣列轉換為 Dict 列表，供 Pandas 讀取
+        playlist_dicts = [item.dict() for item in playlist]
+        new_data = pd.DataFrame(playlist_dicts)
+        
         if not new_data.empty:
             new_data.columns = [str(c).lower().strip() for c in new_data.columns]
             new_data['username'] = 'admin'
