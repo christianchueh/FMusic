@@ -34,10 +34,10 @@
         /* 💡 修正手機版自動播放關鍵：不使用 display:none，改用隱形並釋放高度，防止 AudioContext 被手機系統強制銷毀 */
         .hidden-player {
             position: absolute !important;
+            left: -9999px !important;
+            top: -9999px !important;
             opacity: 0 !important;
             pointer-events: none !important;
-            height: 0px !important;
-            overflow: hidden !important;
         }
         
         iframe { border: none; width: 100%; height: 130px; transition: opacity 0.3s; }
