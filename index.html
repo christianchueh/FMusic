@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>⚡ FastAPI 雲端智慧電台</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@exampleuser/picocss@1/css/pico.min.css">
+    <style>
+        body { padding: 20px; max-width: 800px; margin: 0 auto; }
+        .song-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .playing { font-weight: bold; color: #10b981; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>🎧 雲端智慧電台</h1>
+        
+        <article>
+            <h5 id="current-title">⏹️ 目前未播放歌曲</h5>
+            <audio id="audio-player" controls style="width: 100%;"></audio>
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button onclick="playNext()" class="outline text-error">⏭️ 手動下一首</button>
+            </div>
+        </article>
+
+        <section>
+            <label for="search">🎵 搜尋歌曲 (SoundCloud)</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="search-input" placeholder="輸入歌名或關鍵字...">
+                <button onclick="searchSongs()">搜尋</button>
+            </div>
+            <div id="search-results"></div>
+        </section>
+
+        <section>
+            <h3>📃 待播清單</h3>
+            <div id="playlist-box"></div>
+        </section>
+    </main>
+
+    <script>
+        let playlist = [];
+        let currentIndex = 0;
+        const player = document.getElementById('audio-player');
+
+        // 1. 初始化：從後端撈取雲端歌單
+        async function loadPlaylist() {
+            const res = await fetch('/api/playlist');
+            playlist = await res.json();
+            renderPlaylist();
+            if (playlist.length > 0 && player.src === "") {
+                loadSong(0, false); // 預載第一首，但不自動播放
+            }
+        }
+
+        // 2. 載入並播放歌曲逻辑
+        async function loadSong(index, shouldPlay = true) {
+            if (index >= playlist.length) index = 0;
+            if (playlist.length === 0) return;
+
+            currentIndex = index;
+            const song = playlist[currentIndex];
+            document.getElementById('current-title').innerText = `▶️ 正在播放: ${song.title}`;
+            
+            renderPlaylist(); // 更新高亮狀態
+
+            // 請求後端解析真實串流網址 (隨點隨解，不浪費流量)
+            const res = await fetch(`/api/stream?url=${encodeURIComponent(song.url)}`);
+            const data = await res.json();
+            
+            player.src = data.stream_url;
+            if (shouldPlay) player.play();
+        }
+
+        // 💡 關鍵：網頁前端監聽「播完了」，自動切換下一首！
+        player.onended = function() {
+            playNext();
+        };
+
+        function playNext() {
+            if (playlist.length > 0) {
+                let nextIndex = (currentIndex + 1) % playlist.length;
+                loadSong(nextIndex, true);
+            }
+        }
+
+        // 3. 渲染歌單 UI
+        function renderPlaylist() {
+            const box = document.getElementById('playlist-box');
+            box.innerHTML = "";
+            playlist.forEach((song, i) => {
+                const isPlaying = i === currentIndex;
+                box.innerHTML += `
+                    <div class="song-item">
+                        <span class="${isPlaying ? 'playing' : ''}">${i+1}. ${song.title}</span>
+                        <div>
+                            <button onclick="loadSong(${i}, true)" class="button secondary small" style="padding:5px 10px; margin-right:5px;">點播</button>
+                            <button onclick="deleteSong(${i})" class="button contrast small" style="padding:5px 10px; background:#da2a2a;">❌</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 4. 搜尋功能
+        async function searchSongs() {
+            const q = document.getElementById('search-input').value;
+            if (!q) return;
+            document.getElementById('search-results').innerHTML = "<p>🔍 搜尋中...</p>";
+            
+            const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+            const results = await res.json();
+            
+            const resBox = document.getElementById('search-results');
+            resBox.innerHTML = "<h5>搜尋結果 (前 5 筆)</h5>";
+            
+            // 這裡前端做分頁或限制數量極度簡單，直接切片前 5 筆
+            results.slice(0, 5).forEach((item) => {
+                const escapedTitle = item.title.replace(/'/g, "\\'");
+                resBox.innerHTML += `
+                    <div class="song-item">
+                        <span>${item.title}</span>
+                        <button onclick="addSong('${escapedTitle}', '${item.url}')" style="padding:5px 10px;">➕ 加入</button>
+                    </div>
+                `;
+            });
+        }
+
+        // 5. 新增與刪除歌曲 (立即同步到 Sheets)
+        async function addSong(title, url) {
+            playlist.push({ title, url });
+            renderPlaylist();
+            await fetch('/api/playlist/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(playlist)
+            });
+        }
+
+        async function deleteSong(index) {
+            playlist.splice(index, 1);
+            if (index === currentIndex) {
+                playNext();
+            } else if (index < currentIndex) {
+                currentIndex--;
+            }
+            renderPlaylist();
+            await fetch('/api/playlist/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(playlist)
+            });
+        }
+
+        // 啟動載入
+        loadPlaylist();
+    </script>
+</body>
+</html>
